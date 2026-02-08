@@ -1,142 +1,4 @@
-"""
-Backend module stubs for deterministic MinerU Q/A extraction pipeline
-"""
-
-# mineru_runner: handles ZIP extraction and workspace setup
-def mineru_runner(pdf_bytes, pdf_hash, workspace):
-    # Save PDF, run MinerU, unzip result
-    # Return ZIP path and workspace
-    pass
-
-# bundle_resolver: resolves markdown, assets, and structured files
-def bundle_resolver(workspace):
-    # Locate primary markdown, assets dir, optional JSONs
-    # Return DocumentBundle dict
-    pass
-
-# markdown_normalizer: extracts atomic blocks and replaces with placeholders
-def markdown_normalizer(md_path, block_maps_path):
-    import re
-    with open(md_path, 'r', encoding='utf-8') as f:
-        text = f.read()
-    block_maps = {'tables': [], 'images': [], 'formulas': [], 'code': []}
-    # Extract HTML tables
-    table_matches = list(re.finditer(r'<table\b[^>]*>[\s\S]*?</table>', text))
-    for i, m in enumerate(table_matches):
-        block_maps['tables'].append({'id': f'T{i+1}', 'html': m.group(0)})
-        text = text.replace(m.group(0), f'[[TABLE:T{i+1}]]')
-    # Extract images
-    img_matches = list(re.finditer(r'!\[[^\]]*\]\(([^)]+)\)', text))
-    for i, m in enumerate(img_matches):
-        img_path = m.group(1)
-        # Try to find caption after image
-        caption_match = re.search(rf'{re.escape(m.group(0))}\s*\n?([^\n]*)', text)
-        caption = caption_match.group(1).strip() if caption_match else ''
-        block_maps['images'].append({'id': f'I{i+1}', 'path': img_path, 'caption': caption})
-        text = text.replace(m.group(0), f'[[IMG:I{i+1}]]')
-    # Extract block math (LaTeX)
-    math_matches = list(re.finditer(r'\$\$[\s\S]*?\$\$', text))
-    for i, m in enumerate(math_matches):
-        block_maps['formulas'].append({'id': f'F{i+1}', 'latex': m.group(0)})
-        text = text.replace(m.group(0), f'[[FORMULA:F{i+1}]]')
-    # Extract fenced code blocks
-    code_matches = list(re.finditer(r'```[\w+-]*\n[\s\S]*?\n```', text))
-    for i, m in enumerate(code_matches):
-        block_maps['code'].append({'id': f'C{i+1}', 'text': m.group(0)})
-        text = text.replace(m.group(0), f'[[CODE:C{i+1}]]')
-    # Save block_maps.json
-    with open(block_maps_path, 'w', encoding='utf-8') as f:
-        import json
-        json.dump(block_maps, f, indent=2)
-    # Save normalized text stream
-    norm_txt_path = os.path.splitext(md_path)[0] + '_normalized.txt'
-    with open(norm_txt_path, 'w', encoding='utf-8') as f:
-        f.write(text)
-    return text, block_maps
-
-# regex_miner: mines Q/A regex template from normalized text (no LLM)
-def regex_miner(normalized_text):
-    import re
-    # Strict MinerU Q/A patterns
-    q_pattern = r'^(?:#{1,6}\s*)?Q(?P<num>\d+)\.\s+(?P<qtext>.+)$'
-    a_pattern = r'^Answer:\s*(?P<atext>.*)$'
-    section_pattern = r'^#{1,6}\s*Section\b.*$'
-    stop_conditions = ['next_question', 'next_section', 'eof']
-    # Diagnostics
-    q_matches = list(re.finditer(q_pattern, normalized_text, re.MULTILINE))
-    a_matches = list(re.finditer(a_pattern, normalized_text, re.MULTILINE))
-    coverage = len(q_matches)
-    confidence = 1.0 if coverage > 0 else 0.0
-    ruleset = {
-        'question_start_patterns': [q_pattern],
-        'answer_start_patterns': [a_pattern],
-        'section_heading_pattern': section_pattern,
-        'stop_conditions': stop_conditions,
-        'atomic_blocks': ['html_table', 'image', 'block_math', 'code_fence'],
-        'exclusions': ['captions_inside_tables', 'code_blocks'],
-        'confidence': confidence,
-        'diagnostics': {'coverage': coverage, 'false_positives': 0, 'notes': []}
-    }
-    return ruleset
-
-# parser: applies ruleset to extract Q/A pairs and link assets
-def parser(normalized_text, block_maps, ruleset):
-    import re
-    items = []
-    q_regex = re.compile(ruleset['question_start_patterns'][0], re.MULTILINE)
-    a_regex = re.compile(ruleset['answer_start_patterns'][0], re.MULTILINE)
-    # Find all questions
-    q_matches = list(q_regex.finditer(normalized_text))
-    for idx, q_match in enumerate(q_matches):
-        q_start = q_match.end()
-        q_end = q_matches[idx+1].start() if idx+1 < len(q_matches) else len(normalized_text)
-        block = normalized_text[q_start:q_end]
-        # Find answer in block
-        a_match = a_regex.search(block)
-        answer = a_match.group('atext').strip() if a_match else ''
-        question = q_match.group('qtext').strip()
-        # Asset linking
-        def find_asset_links(text, block_maps):
-            table_tags = re.findall(r'\[\[TABLE:T(\d+)\]\]', text)
-            img_tags = re.findall(r'\[\[IMG:I(\d+)\]\]', text)
-            formula_tags = re.findall(r'\[\[FORMULA:F(\d+)\]\]', text)
-            code_tags = re.findall(r'\[\[CODE:C(\d+)\]\]', text)
-            tables = [block_maps['tables'][int(i)-1]['id'] if block_maps['tables'] and int(i)-1 < len(block_maps['tables']) else f'T{i}' for i in table_tags]
-            images = [block_maps['images'][int(i)-1]['id'] if block_maps['images'] and int(i)-1 < len(block_maps['images']) else f'I{i}' for i in img_tags]
-            formulas = [block_maps['formulas'][int(i)-1]['id'] if block_maps['formulas'] and int(i)-1 < len(block_maps['formulas']) else f'F{i}' for i in formula_tags]
-            code = [block_maps['code'][int(i)-1]['id'] if block_maps.get('code') and int(i)-1 < len(block_maps['code']) else f'C{i}' for i in code_tags]
-            return {'tables': tables, 'images': images, 'formulas': formulas, 'code': code}
-        asset_links = find_asset_links(question + answer, block_maps)
-        items.append({
-            'id': f'Q{idx+1:03d}',
-            'question': {'number': idx+1, 'text': question, 'page_start': None, 'page_end': None},
-            'answer': {
-                'text_markdown': answer,
-                'tables': asset_links['tables'],
-                'images': asset_links['images'],
-                'math': asset_links['formulas'],
-                'code': asset_links['code']
-            },
-            'evidence': {
-                'source_span': {'start_char': q_match.start(), 'end_char': q_end},
-                'matched_pattern': ruleset['question_start_patterns'][0]
-            }
-        })
-    return items
-
-# validator: validates extraction quality and triggers fallback if needed
-def validator(items, ruleset):
-    # Check questions_found, empty_answer_rate, outliers, monotonic numbering
-    # Return issues and fallback triggers
-    pass
-
-# gemini_regex_helper: optional fallback for regex mining (never extracts answers)
-def gemini_regex_helper(snippet, context):
-    # Call Gemini for regex candidates only if confidence is low
-    pass
 import streamlit as st
-from streamlit_option_menu import option_menu
-from PIL import Image, ImageOps
 import os
 import zipfile
 import json
@@ -399,92 +261,22 @@ def main():
             st.stop()
         st.stop()
 
-    from dotenv import load_dotenv
-    load_dotenv()
-    token = os.getenv("mineru")
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    # Load secrets from .streamlit/secrets.toml (st.secrets) if available, else fallback to .env/env
+    token = None
+    gemini_api_key = None
+    if hasattr(st, "secrets") and "mineru" in st.secrets:
+        token = st.secrets["mineru"]
+    if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        gemini_api_key = st.secrets["GEMINI_API_KEY"]
+    if not token or not gemini_api_key:
+        load_dotenv()
+        token = token or os.getenv("mineru")
+        gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
     if not token:
-        st.error("MinerU API token not found in .env.")
+        st.error("MinerU API token not found in secrets.toml or .env.")
         st.stop()
     if not gemini_api_key:
-        st.error("Gemini API key not found in .env.")
-        st.stop()
-
-    # ...existing pipeline logic...
-    # Option menu (future: multi-page)
-    selected = option_menu(
-        menu_title=None,
-        options=["Upload PDF", "Pipeline Status", "Download Output"],
-        icons=["file-earmark-arrow-up", "gear", "download"],
-        orientation="horizontal"
-    )
-    if selected == "Upload PDF":
-        uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"])
-        if not uploaded_pdf:
-            st.info("Please upload a PDF to begin.")
-            return
-        pdf_bytes = uploaded_pdf.read()
-        pdf_hash = hashlib.sha256(pdf_bytes).hexdigest()
-        workspace = os.path.join('work', pdf_hash)
-        os.makedirs(workspace, exist_ok=True)
-        pdf_path = os.path.join(workspace, 'input.pdf')
-        with open(pdf_path, 'wb') as f:
-            f.write(pdf_bytes)
-        output_dir = os.path.join('output_json')
-        os.makedirs(output_dir, exist_ok=True)
-        final_json_path = os.path.join(workspace, 'final.json')  # cache
-        from datetime import datetime
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        input_name = os.path.splitext(uploaded_pdf.name)[0]
-        output_json_path = os.path.join(output_dir, f'{input_name}_{timestamp}.json')
-        # Cache clear option
-        if os.path.exists(final_json_path):
-            st.success("Cached result found.")
-            with open(final_json_path, 'r', encoding='utf-8') as f:
-                cached_json = f.read()
-                st.json(json.loads(cached_json))
-                st.download_button("Download Final JSON", cached_json, file_name='final.json')
-            if st.button("Clear Cache for this PDF"):
-                import shutil
-                shutil.rmtree(workspace, ignore_errors=True)
-                if os.path.exists(output_json_path):
-                    os.remove(output_json_path)
-                st.warning("Cache cleared. Please re-upload the PDF.")
-                st.stop()
-            st.stop()
-        # Use session keys if available, else fallback to .env
-        mineru_key = st.session_state.get('mineru_key', None)
-        gemini_key = st.session_state.get('gemini_key', None)
-        if not mineru_key or not gemini_key:
-            from dotenv import load_dotenv
-            load_dotenv()
-            import os
-            mineru_key = mineru_key or os.getenv("mineru")
-            gemini_key = gemini_key or os.getenv("GEMINI_API_KEY")
-        if not mineru_key:
-            st.error("MinerU API key not found. Please enter it in the sidebar settings.")
-            st.stop()
-        if not gemini_key:
-            st.error("Gemini API key not found. Please enter it in the sidebar settings.")
-            st.stop()
-        # ...existing pipeline logic...
-        # (Keep all extraction, validation, and download logic unchanged)
-        # After extraction, show download button and pipeline status
-        st.success("Extraction complete. See Pipeline Status or Download Output.")
-    elif selected == "Pipeline Status":
-        st.info("Check extraction progress, validation, and asset linking.")
-        # Optionally show logs, validation issues, asset summary
-        # ...existing code...
-    elif selected == "Download Output":
-        st.info("Download the final structured JSON output.")
-        # ...existing code...
-    token = os.getenv("mineru")
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not token:
-        st.error("MinerU API token not found in .env.")
-        st.stop()
-    if not gemini_api_key:
-        st.error("Gemini API key not found in .env.")
+        st.error("Gemini API key not found in secrets.toml or .env.")
         st.stop()
 
     # Step 1: MinerU API - Upload and parse PDF

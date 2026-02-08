@@ -21,15 +21,21 @@ PDF (input)
       ```bash
       pip install -r requirements.txt
       ```
-   3. Add `.env` file with your MinerU and Gemini API keys:
-      ```env
-      mineru=<YOUR_MINERU_API_KEY>
-      GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
-      ```
+   3. Add secrets securely:
+      - For local/cloud use, create `.streamlit/secrets.toml` with:
+        ```toml
+        mineru = "<YOUR_MINERU_API_KEY>"
+        GEMINI_API_KEY = "<YOUR_GEMINI_API_KEY>"
+        ```
+      - Or use `.env` for local development:
+        ```env
+        mineru=<YOUR_MINERU_API_KEY>
+        GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
+        ```
+      - `.streamlit/secrets.toml` is ignored by git for security.
    4. UI & Theme:
       - All UI dependencies are in `requirements.txt` (`streamlit`, `streamlit_option_menu`, `Pillow`).
       - Custom theme is set via `.streamlit/config.toml` (auto-created, see sample).
-      - UI inspired by `sample ui/app.py`.
    5. Run the Streamlit app:
       ```bash
       streamlit run streamlit_app.py
