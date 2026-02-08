@@ -166,7 +166,6 @@ def mine_regex_patterns(text, gemini_api_key):
 def extract_qa_with_patterns(text, block_maps, ruleset):
     # More robust fallback patterns for question and answer detection
     def sanitize_pattern(p):
-        # Remove inline/global flags (e.g., (?m), (?i)) not at start
         p = re.sub(r'\(\?[a-z]+\)', '', p)
         return p.strip()
     q_patterns = [sanitize_pattern(p) for p in (ruleset.get('question_start_patterns') or [
@@ -190,21 +189,18 @@ def extract_qa_with_patterns(text, block_maps, ruleset):
         r'(# Formula:)',
         r'(# Image:)',
         r'(# Code:)',
-        r'(# .+)' # headings
+        r'(# .+)'
     ])]
     a_patterns = [sanitize_pattern(p) for p in (ruleset.get('answer_start_patterns') or [
-        r'(A:|Answer:|Solution:|# Solution:|# Answer:|# Solution|# Answer|# Ans:|Ans:|\nAnswer:|\nAns:|\nSolution:|\n# Ans:|\n# Answer:|\n# Solution:|\n# Answer)' # covers more answer formats
+        r'(A:|Answer:|Solution:|# Solution:|# Answer:|# Solution|# Answer|# Ans:|Ans:|\nAnswer:|\nAns:|\nSolution:|\n# Ans:|\n# Answer:|\n# Solution:|\n# Answer)'
     ])]
     qa = []
-    # Compile each pattern separately to avoid inline flag errors
     q_regexes = [re.compile(p, re.DOTALL) for p in q_patterns]
     a_regexes = [re.compile(p, re.DOTALL) for p in a_patterns]
-    # Find all question starts
     q_starts = []
     for regex in q_regexes:
         q_starts.extend(list(regex.finditer(text)))
     q_starts = sorted(q_starts, key=lambda m: m.start())
-    # If no question starts found, try splitting by 'Q' or numbered list manually
     if not q_starts:
         manual_qs = list(re.finditer(r'(Q\d+\)|Q\d+\.|Q\d+|Question \d+|\d+\)|\d+\.|# .+)', text))
         q_starts = manual_qs
@@ -212,7 +208,6 @@ def extract_qa_with_patterns(text, block_maps, ruleset):
         q_start = q_match.end()
         q_end = q_starts[idx+1].start() if idx+1 < len(q_starts) else len(text)
         block = text[q_start:q_end]
-        # Find first answer match in block
         a_match = None
         for a_regex in a_regexes:
             a_match = a_regex.search(block)
@@ -224,7 +219,6 @@ def extract_qa_with_patterns(text, block_maps, ruleset):
             answer = block[a_start:a_end].strip()
             question = q_match.group(0) + block[:a_match.start()].strip()
         else:
-            # Try to split by heading or 'Solution' if present
             alt_a_match = re.search(r'(# Solution:|# Answer:|A:|Answer:|Solution:)', block)
             if alt_a_match:
                 a_start = alt_a_match.end()
@@ -235,24 +229,34 @@ def extract_qa_with_patterns(text, block_maps, ruleset):
                 question = q_match.group(0) + block.strip()
 
         # Asset linking: find all asset placeholders in question/answer
-        def find_asset_links(text):
-            # Find all asset placeholders in text
+        def find_asset_links(text, block_maps):
             table_tags = re.findall(r'\[\[TABLE:T(\d+)\]\]', text)
             img_tags = re.findall(r'\[\[IMG:I(\d+)\]\]', text)
             formula_tags = re.findall(r'\[\[FORMULA:F(\d+)\]\]', text)
-            return {
-                'linked_tables': [int(i)-1 for i in table_tags],
-                'linked_images': [int(i)-1 for i in img_tags],
-                'linked_formulas': [int(i)-1 for i in formula_tags]
-            }
+            code_tags = re.findall(r'\[\[CODE:C(\d+)\]\]', text)
+            caption_tags = re.findall(r'\[\[CAPTION:K(\d+)\]\]', text)
+            # Link actual block content
+            tables = [block_maps['tables'][int(i)-1] if block_maps['tables'] and int(i)-1 < len(block_maps['tables']) else f'T{i}' for i in table_tags]
+            images = [block_maps['images'][int(i)-1] if block_maps['images'] and int(i)-1 < len(block_maps['images']) else f'I{i}' for i in img_tags]
+            formulas = [block_maps['formulas'][int(i)-1] if block_maps['formulas'] and int(i)-1 < len(block_maps['formulas']) else f'F{i}' for i in formula_tags]
+            codes = [block_maps['codes'][int(i)-1] if block_maps['codes'] and int(i)-1 < len(block_maps['codes']) else f'C{i}' for i in code_tags]
+            captions = [block_maps['captions'][int(i)-1] if block_maps['captions'] and int(i)-1 < len(block_maps['captions']) else f'K{i}' for i in caption_tags]
+            return {'tables': tables, 'images': images, 'formulas': formulas, 'codes': codes, 'captions': captions}
 
-        asset_links = find_asset_links(question + answer)
+        asset_links = find_asset_links(question + answer, block_maps)
+        evidence = []
+        for tag, items in asset_links.items():
+            for item in items:
+                evidence.append({'type': tag, 'content': item})
         qa.append({
             'question': question.strip(),
             'answer': answer,
-            'linked_tables': asset_links['linked_tables'],
-            'linked_images': asset_links['linked_images'],
-            'linked_formulas': asset_links['linked_formulas']
+            'linked_tables': asset_links['tables'],
+            'linked_images': asset_links['images'],
+            'linked_formulas': asset_links['formulas'],
+            'linked_codes': asset_links['codes'],
+            'linked_captions': asset_links['captions'],
+            'evidence': evidence
         })
     return qa
 
