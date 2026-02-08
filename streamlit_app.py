@@ -32,16 +32,54 @@ def find_best_md(unzipped_dir):
 def normalize_markdown(md_path, block_maps_path):
     with open(md_path, 'r', encoding='utf-8') as f:
         text = f.read()
-    tables = re.findall(r'(\|\|.+\|\|)', text)
-    images = re.findall(r'!\[.*?\]\((.*?)\)', text)
-    formulas = re.findall(r'\$\$(.*?)\$\$', text, re.DOTALL)
-    for i, t in enumerate(tables):
-        text = text.replace(t, f'[[TABLE:T{i+1}]]')
-    for i, img in enumerate(images):
-        text = text.replace(img, f'[[IMG:I{i+1}]]')
-    for i, fmla in enumerate(formulas):
-        text = text.replace(f'$$'+fmla+'$$', f'[[FORMULA:F{i+1}]]')
-    block_maps = {'tables': tables, 'images': images, 'formulas': formulas}
+    # MinerU standard atomic block extraction
+    # 1) HTML Table block
+    table_matches = list(re.finditer(r'<table\b[^>]*>[\s\S]*?</table>', text))
+    tables = []
+    for i, m in enumerate(table_matches):
+        tables.append(m.group(0))
+        text = text.replace(m.group(0), f'[[TABLE:T{i+1}]]')
+    # 2) Fenced code block
+    code_matches = list(re.finditer(r'```[\w+-]*\n[\s\S]*?\n```', text))
+    codes = []
+    for i, m in enumerate(code_matches):
+        codes.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CODE:C{i+1}]]')
+    # 3) Block math (dollar and bracket)
+    math_matches = list(re.finditer(r'\$\$[\s\S]*?\$\$', text))
+    math_bracket_matches = list(re.finditer(r'\\\[[\s\S]*?\\\]', text))
+    formulas = []
+    for i, m in enumerate(math_matches):
+        formulas.append(m.group(0))
+        text = text.replace(m.group(0), f'[[FORMULA:F{i+1}]]')
+    for i, m in enumerate(math_bracket_matches):
+        formulas.append(m.group(0))
+        text = text.replace(m.group(0), f'[[FORMULA:F{len(math_matches)+i+1}]]')
+    # 4) Image line (Markdown)
+    img_matches = list(re.finditer(r'^!\[[^\]]*\]\(([^)]+)\)\s*$', text, re.MULTILINE))
+    images = []
+    for i, m in enumerate(img_matches):
+        images.append(m.group(0))
+        text = text.replace(m.group(0), f'[[IMG:I{i+1}]]')
+    # 5) Captions
+    caption_matches = list(re.finditer(r'^(Figure|Fig\.|Table|Formula)\s+\d+\s*:\s+.+$', text, re.MULTILINE))
+    captions = []
+    for i, m in enumerate(caption_matches):
+        captions.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CAPTION:K{i+1}]]')
+    # 6) Section heading
+    section_matches = list(re.finditer(r'^#{1,6}\s*Section\b.*$', text, re.MULTILINE))
+    sections = []
+    for i, m in enumerate(section_matches):
+        sections.append(m.group(0))
+    block_maps = {
+        'tables': tables,
+        'images': images,
+        'formulas': formulas,
+        'codes': codes,
+        'captions': captions,
+        'sections': sections
+    }
     with open(block_maps_path, 'w', encoding='utf-8') as f:
         json.dump(block_maps, f)
     return text, block_maps
