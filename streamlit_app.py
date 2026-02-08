@@ -35,11 +35,21 @@ def normalize_markdown(md_path, block_maps_path):
     # Robust atomic block extraction for all table, formula, image, code types
     # Tables: Markdown, HTML, LaTeX
     tables = []
-    # Markdown table
-    for m in re.finditer(r'((?:\|.*\|(?:\n|$))+)', text):
-        if m.group(0).count('|') > 1:
-            tables.append(m.group(0))
-            text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+    # Markdown table (improved: must have header, separator, and at least one row)
+    # More robust markdown table extraction: header, separator, at least one data row, flexible whitespace
+    md_table_pattern = re.compile(
+        r'(?:^|\n)'
+        r'(\|(?:[^\n]*\|)+)\s*\n'  # header
+        r'(\|[ \t:.-]+\|)\s*\n'     # separator
+        r'((?:\|(?:[^\n]*\|)+\s*\n){1,})',  # at least one data row
+        re.MULTILINE
+    )
+    for m in md_table_pattern.finditer(text):
+        table_block = m.group(0)
+        # Avoid duplicate extraction if already replaced
+        if table_block.strip() and table_block in text:
+            tables.append(table_block)
+            text = text.replace(table_block, f'[[TABLE:T{len(tables)}]]')
     # HTML table
     for m in re.finditer(r'(<table[\s\S]*?</table>)', text):
         tables.append(m.group(0))
