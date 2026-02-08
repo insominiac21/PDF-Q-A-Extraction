@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.vscode/
+# Output and cache
+output_json/
+output zip/
+work/
+streamlit_outputs/
+test_outputs/
+# Logs and temp
+*.log
+*.tmp
+*.bak
+*.swp
+# Sample and test folders
+sample ui/
+tests/
+validation/
+# Ignore test scripts
+test_*.py
+streamlit_key_check.py
+# Ignore Markdown and config backups
+*.md.bak
+*.toml.bak

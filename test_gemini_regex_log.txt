@@ -1,0 +1,148 @@
+
+--- Test Gemini ---
+markdowns/datalab-output-Operation Research.pdf.md
+Question pattern: `r'(?m)^(?:\d+\)|(?:\*\*|#\s*)?Q\d+[\):\.](?:\*\*)?|!\[.*?\]\s*\d+\))'`
+Example: '1) A Person wants to decide...' or '**Q1)** A firm can produce...' or '![image] 2) A manufacture...'
+
+Answer pattern: `r'(?i)(?m)^(?:#{1,3}\s*(?:\*\*)?Solution:?(?:\*\*)?|\*\*Solution:?\*\*)'`
+Example: '## Solution:' or '## **Solution:**' or '**Solution:**'
+
+Stop condition: `r'(?m)^(?=#{1,3}\s|(?:\*\*|#\s*)?Q\d+[\):\.](?:\*\*)?|\d+\))'`
+Example: Matches the boundary before a new '## Linear Programming' header or the start of the next '2) A hospital...' question.
+
+Exclusion: `r'(?m)^(!\[.*?\]\(.*?\))|(?<=\n)[A-Z][a-z\s\-]+\.\s*(?=\n)|(?:\d+\s+Min\s*[-—]+\s*\d+\s+products)'`
+Example: Ignores the image syntax `![...](...)`, repetitive image descriptions like 'A blue hand-drawn asterisk...', and metadata/logic notes like '1 Min-----100 products'.
+
+Asset placeholder (Tables): `r'(\|.*?\|(?:\n\|.*?\|)+)'`
+Example: Captures the markdown tables used for food yields or machine capacity.
+
+Asset placeholder (Formulas): `r'(\$\$.*?\$\$|\$.*?\$)'`
+Example: Captures LaTeX blocks like '$$Z_{\min} = 45X_1 + 40X_2 + 85X_3 + 65X_4$$' or inline '$X_1$'.
+
+Fallback Question pattern: `r'(?m)^(?:\d+[\.\)]|Q\d+[:\.]|#+ .+|Question \d+)'`
+Example: '1. ', 'Q1:', or '### Question 1'
+
+Fallback Answer pattern: `r'(?i)(?m)^(?:Answer:|Solution:|Ans:|#+ Solution|#+ Answer)'`
+Example: 'Answer: ', 'Solution:', or '### Solution'
+
+--- Test Gemini ---
+markdowns/datalab-output-l2.pdf.md
+Based on the educational markdown provided, here are the robust regex patterns for extracting question and answer pairs, along with stop conditions and exclusions.
+
+### **Question Patterns**
+Matches headings (with or without numbers/symbols), bolded numbered headers, and standalone interrogative sentences.
+
+*   **Pattern:** `r'(?:^#+\s+(?:[\d①-⑨]+\.?\s*)?.*|^[\d①-⑨]+\.\s+.*?\?|^\*\*[\d①-⑨]+\.\s+.*?\*\*|(?<=\n)[A-Z][^#\n]+?\?)'`
+*   **Example 1 (Heading):** `# 1. What is Clustering?`
+*   **Example 2 (Icon/Numbered Heading):** `## ① Live Migration of VMs`
+*   **Example 3 (Bolded List Header):** `**③ Dynamic Deployment of Virtual Clusters**`
+*   **Example 4 (Interrogative):** `How Does HPC Work?`
+
+### **Answer Patterns**
+Matches the descriptive text, bulleted lists, and "Real-life example" blocks immediately following a question pattern.
+
+*   **Pattern:** `r'(?:(?<=\n)(?![#\d])[\s\S]+?(?=\n\n#|\n\n---|\n\n\*\*|\Z)|(?:Real-life example:|Example icon Example|Strategy:|Types:)\s*[\s\S]+?(?=\n\n#|\n\n---|\Z))'`
+*   **Example 1 (Paragraph):** `Clustering refers to connecting multiple nodes...`
+*   **Example 2 (Labeled Example):** `Real-life example: NASA uses HP clusters to process satellite imagery...`
+*   **Example 3 (Multi-part/Nested List):** `- **Full Back up:** On Sunday, you photocopy the entire notebook.`
+
+### **Asset & Formula Patterns**
+Matches images, captions, and LaTeX math formulas to ensure they are captured as part of the answer or identified for specific processing.
+
+*   **Pattern:** `r'(!\[.*?\]\(.*?\))|(\$\$.*?\$\$|\$.*?\$)'`
+*   **Example 1 (Image):** `![Diagram illustrating the Netflix architecture...](daa4a6fa7e2ba1954258f86b4928eb32_img.jpg)`
+*   **Example 2 (Formula):** `$10^{12}$`
+
+### **Stop Conditions**
+Defines where an answer ends and a new logical block begins.
+
+*   **Pattern:** `r'(?:\n#+\s|\n---\n|\n\d+\.\s|\n\*\*[\d①-⑨]|\Z)'`
+*   **Example 1 (New Heading):** `## Virtual Clustering`
+*   **Example 2 (Horizontal Rule):** `---`
+*   **Example 3 (New Numbered Item):** `2. Disaster Recovery`
+
+### **Exclusion Patterns**
+Used to ignore decorative icons, redundant image captions, and metadata.
+
+*   **Pattern:** `r'(?:^[\w\s]+icon\s|(?<=\.jpg\)\n\n).+?(?=\n\n)|^\s*\*.*?\n)'`
+*   **Example 1 (Icons):** `Warning icon` or `Fire icon`
+*   **Example 2 (Redundant Caption):** The text repeating the alt-text immediately following an image link.
+*   **Example 3 (Emphasis/Note):** `*Traditional VMs require manual setup...`
+
+### **Robust Fallback Patterns**
+Universal patterns to use if specific structural markers are missing.
+
+*   **Question Fallback:** `r'^(?:#+.+|[A-Z].+\?)$'m`
+*   **Example:** `## What is Cloud Connect?`
+*   **Answer Fallback:** `r'(?s)(?<=\n\n)(?![#\s]).+?(?=\n\n#|\Z)'`
+*   **Example:** `A cloud platform creates a virtual pool...`
+
+--- Test Gemini ---
+markdowns/datalab-output-l1.pdf.md
+Question pattern: `r'(?:^#{1,4}\s+(?:\d+\.\s+)?|^(\d+\.|\u2022|-)\s+|\*\*)([A-Z].*?[\?:])(?:\*\*)?'`
+Example: `## 1. What is Cloud Computing?` or `**Definition:**`
+
+Answer pattern: `r'(?s)(?<=[\?:]\n\n|[\?:]\n)([^#\n].*?)(?=\n\n#{1,4}|\n\n\d+\.|\n\n\*\*|\Z)'`
+Example: `Cloud computing is the delivery of computing services (storage, processing, networking, software) over the internet.`
+
+Multi-part Question pattern: `r'^(?:[ \t]*)(\d+\.|[a-z]\.|\u2022|-)\s+([A-Z].*?:)$'`
+Example: `1. Client Infrastructure:`
+
+Asset pattern (Tables): `r'(?s)(\|.*?\|(?:\n\|.*?\|)+)'`
+Example: `| Benefit | Description | Example | \n |---|---|---|`
+
+Asset pattern (Images/Diagrams): `r'(!\[.*?\]\(.*?\))'`
+Example: `![Diagram of Cloud Architecture Components](aa9e46.jpg)`
+
+Asset pattern (Code blocks/Mermaid): `r'(```[a-z]*\n[\s\S]*?\n```)'`
+Example: ````graph TD\n    CI[Client Infrastructure] --> I((Internet))\n``` `
+
+Stop condition: `r'(\n\n(?=#{1,4})|\n\n(?=\d+\.)|\n\n(?=\*\*.*?:)|\Z)'`
+Example: A new heading `## 2. Cloud Architecture Foundation` or a new numbered item.
+
+Exclusion pattern: `r'(^Mid sem.*|^Detailed Notes.*|\[.*?\]\(#\)|A blue scribble.*)'`
+Example: `Mid sem notes -CC` or `[eg. google and kaggle offers GPU in colab notebooks](#)`
+
+Fallback Question pattern: `r'(^#{1,6}\s+.*|^\d+\.\s+.*|^\*\*.*?\*\*)'`
+Example: `### • SOA (Service-Oriented Architecture):`
+
+Fallback Answer pattern: `r'(?s)(?:\n)(?!#|\d+\.)(.+?)(?=\n\n#|\n\n\d+\.|\Z)'`
+Example: `Combines two paradigms: Service Level Agreements (SLA) are formal contracts...`
+
+--- Test Gemini ---
+markdowns/datalab-output-5th Sem Sessional I - CSE.pdf.md
+Question pattern: `r'(?i)^\s*(\*\*|###?\s+)?(Q|Que|Question)\.?\s*\d+[ .a-z\)\(]*[:.]?.*'`
+Example: '**Q. 1 Technical writing is a significant factor...**'
+
+Sub-question pattern: `r'(?i)^\s*([-•]\s+)?([a-z]|[ivx]+|[0-9])[\.\)]\s+.*'`
+Example: '- a. What are the ethical issues involve in above case?'
+
+Table-based question pattern: `r'\|\s*(Q\d+[a-z\.\)]*)\s*\|\s*(.*?)\s*\|'`
+Example: '| Q1.a) | <p>Read the following case study...</p> |'
+
+Answer pattern (Fallback): `r'(?i)^\s*(\*\*|###?\s+)?(Ans|Answer|Solution|Soln|A)[:.]\s*'`
+Example: '**Answer:** The 6 Cs of TQM are Commitment, Culture, Continuous Improvement...'
+
+Stop condition: `r'(\n\s*\n(?=#+)|(?=^\s*(\*\*|#+ )?(Q|Que|Question)\.?\s*\d+)|---ALL THE BEST---|(?=^Paper set by))'`
+Example: A new heading starting with '###' or the signature block 'Paper set by'.
+
+Exclusion pattern: `r'(?i)(Logo of .*|!\[.*?\]\(.*?\)|Marks:\s*\d+|Duration:.*|Date:.*|Time:.*|Semester:.*|Department of.*|###\s+Important Instructions:.*|^-+$)'`
+Example: 'Logo of Indian Institute of Information Technology, Nagpur...'
+
+Asset placeholder (Table): `r'(\|.*\|[\r\n]+\|[-:| ]+\|[\r\n]+(?:\|.*\|[\r\n]*)+)'`
+Example: The markdown table containing 'Question No.' and 'Questions'.
+
+Asset placeholder (Image/Formula): `r'(!\[.*?\]\(.*?\)|(?:\$\$?|\\\[|\\\(|\\begin\{equation\}).*?(?:\$\$?|\\\]|\\\)|\\end\{equation\}))'`
+Example: '$$f_1(n) = 10^n$$'
+
+Asset placeholder (Code): `r'(```[\s\S]*?```|(?:\n\s{4}.+)+)'`
+Example: '```Ones(n): if n = 0: print 1 ...```'
+
+Multi-part question separator: `r'\s*(\[\d+[\+ \d]*\]|CO\d+(?:,\s*CO\d+)*|\(\d+M\))\s*'`
+Example: '(4 Marks) (CO1)' or '[2+2+1] (CO1)'
+
+Fallback pattern (Questions): `r'(?i)^\s*(Q\d+|Question\s*\d+|Que\.\s*\d+|#\s+Q.*|>\s*Q.*)'`
+Example: 'Que. 1 One of the tests of integrity...'
+
+Fallback pattern (Answers): `r'(?i)^\s*(A:|Answer:|Solution:|#\s*Solution:)'`
+Example: 'Solution: The total time required is calculated by...'

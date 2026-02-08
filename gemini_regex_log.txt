@@ -1,0 +1,342 @@
+
+--- Gemini attempt 2 ---
+```json
+{
+  "question_start_patterns": [
+    {
+      "pattern": "^#\\s*Q\\d+[\\.:]\\s+",
+      "example": "# Q1. What does accuracy measure?",
+      "description": "Specific markdown header pattern for numbered questions."
+    },
+    {
+      "pattern": "^Q\\d+[\\.:]\\s+",
+      "example": "Q21. Solve 2x^2...",
+      "description": "Standard line start for questions without a markdown header hash."
+    },
+    {
+      "pattern": "^\\d+[\\.:]\\s+",
+      "example": "1. What is the process?",
+      "description": "Fallback: Standard numbered list pattern."
+    },
+    {
+      "pattern": "^#+\\s+[^\\n]+\\?\\s*$",
+      "example": "### Why does this happen?",
+      "description": "Fallback: Any header line ending in a question mark."
+    },
+    {
+      "pattern": "^\\*\\*Q(?:uestion)?\\s*\\d*\\*\\*[:\\.]?\\s*",
+      "example": "**Question 1**: Describe the trend.",
+      "description": "Fallback: Bolded question labels."
+    }
+  ],
+  "answer_start_patterns": [
+    {
+      "pattern": "^Answer:\\s*",
+      "example": "Answer: The fraction of all predictions...",
+      "description": "Explicit 'Answer' prefix used in the document."
+    },
+    {
+      "pattern": "^Ans:\\s*",
+      "example": "Ans: 42",
+      "description": "Fallback: Shortened answer prefix."
+    },
+    {
+      "pattern": "^\\*\\*Answer\\*\\*:\\s*",
+      "example": "**Answer**: 0.91",
+      "description": "Fallback: Bolded answer prefix."
+    },
+    {
+      "pattern": "^A[\\.:]\\s+",
+      "example": "A. The result is positive.",
+      "description": "Fallback: Simple 'A' prefix for Q&A pairs."
+    }
+  ],
+  "stop_conditions": [
+    {
+      "pattern": "^#\\s+Section",
+      "example": "# Section C — Tables",
+      "description": "Stop at a new major section heading."
+    },
+    {
+      "pattern": "^#?\\s*Q\\d+",
+      "example": "# Q12. Suppose...",
+      "description": "Stop when the next question marker is detected."
+    },
+    {
+      "pattern": "^End of Packet",
+      "example": "End of Packet",
+      "description": "Stop at explicit document termination markers."
+    },
+    {
+      "pattern": "^(Figure|Table|Formula)\\s+\\d+:",
+      "example": "Figure 1: Sine Wave",
+      "description": "Stop at asset captions following an answer block."
+    },
+    {
+      "pattern": "\\n\\s*\\n",
+      "example": "\\n\\n",
+      "description": "Fallback: Stop at double newlines (paragraph break) if no prefix is found."
+    }
+  ],
+  "exclusions": [
+    {
+      "pattern": "(?s)```[\\s\\S]*?```",
+      "example": "```python\\nprint('Q1')\\n```",
+      "description": "Exclude all content within code blocks to avoid false positives."
+    },
+    {
+      "pattern": "(?s)<table>[\\s\\S]*?</table>",
+      "example": "<table><tr><td>...</td></tr></table>",
+      "description": "Treat tables as atomic blocks and exclude from linear regex mining."
+    },
+    {
+      "pattern": "\\[\\[(IMG|TABLE|FORMULA|CODE):[^\\]]+\\]\\]",
+      "example": "[[IMG:I1]]",
+      "description": "Exclude asset placeholders which are handled as separate objects."
+    },
+    {
+      "pattern": "^\\(f[iI]g\\.?\\s*\\d+\\)",
+      "example": "(Fig. 1)",
+      "description": "Exclude parenthetical figure references within text."
+    }
+  ]
+}
+```
+
+--- Gemini attempt 2 ---
+Question pattern: `r'(?:^|\n)(?:#\s*(?:\d+\.\s+)?|(?:\d+\.\s+))([^#\n\d][^#\n]+(?:\?|:))'`
+Example: `# 1. What is Cloud Computing?` or `1. Client Infrastructure:`
+
+Answer pattern: `r'(?:Definition:|Example:|Real-life Example:|Advantages:|Disadvantages:|^[•▪o]\s+|[\s\S]+?)(?=\n#|\n\d+\.|\n\n|$)'`
+Example: `Definition: for anything that involves delivering hosted services over the Internet.`
+
+Asset pattern (Tables/Images/Formulas): `r'(<table>[\s\S]*?<\/table>|!\[\]\(\[\[IMG:[^\]]+\]\]\))'`
+Example: `![]([[IMG:I1]])` or `<table><tr><td>Benefit</td>...</tr></table>`
+
+Stop condition: `r'(?:\n#\s|\n\d+\.\s|\n{2,})'`
+Example: A new heading `# 2. Cloud Architecture Foundation` or a double newline.
+
+Exclusion: `r'(^# Key Takeaways:[\s\S]*|!\[\]\(\[\[IMG:.*?\]\]\))'`
+Example: Sections labeled "Key Takeaways" or image markdown placeholders.
+
+Multi-part Question pattern: `r'(?:#\s\d+\..+\n)(?:[\s\S]*?)(?=\n#\s\d+\.)'`
+Example: `# 3. Cloud Architecture Components` followed by its sub-numbered components 1 through 10.
+
+Bold/Key-Value Answer pattern: `r'(?:\n|\r)\*\*([^*]+)\*\*:\s*([^\n]+)'`
+Example: `**Cost Analysis**: Netflix migrated to AWS to save $1B/year.`
+
+Fallback Question pattern: `r'(?:^|\n)(?:#\s+|(?:\d+\.)\s+|Q:)(.+)'`
+Example: `1. What is a Cloud Computing Framework?`
+
+Fallback Answer pattern: `r'(?:^|\n)(?:A:|Solution:|Answer:|Definition:)([\s\S]+?)(?=\n#|\n\d+\.)'`
+Example: `Answer: The cloud itself, managing resources, security, and data.`
+
+--- Gemini attempt 2 ---
+Based on the markdown provided, here are the robust regex patterns for mining question and answer pairs.
+
+**Question Patterns**
+*   **Numbered Heading Questions:** `r'^#\s*\d+\.\s+(.*?)(?:\?|:)?$'`
+    *   Example: `# 1. What is Cloud Computing?`
+*   **Bolded or Labeled Section Questions:** `r'^#\s+([A-Z][\w\s/&-]+):$'`
+    *   Example: `# Core Characteristics:`
+*   **Numbered List Questions (Topics):** `r'^\d+\.\s+([A-Z][^:\n]+)(?=:|\n)'`
+    *   Example: `1. Software as a Service (SaaS)`
+*   **Sub-heading Components:** `r'^#\s*\d+\.\s+([A-Z].*?):'`
+    *   Example: `# 1. Client Infrastructure:`
+
+**Answer Patterns**
+*   **Explicit Labels:** `r'(?i)^(Definition|Mechanism|Focus|Issue|Impact|Analogy|Workaround|Mitigation|Incident):\s*(.*)'`
+    *   Example: `Definition: A structured approach providing tools and technologies...`
+*   **Bullet Point Details:** `r'^[\s]*[•o▪-]\s+(.*)'`
+    *   Example: `▪ PaaS (Platform as a Service): Development platforms...`
+*   **Example Blocks:** `r'(?i)^(Real-life Example|Example|Real Application):\s*(.*)'`
+    *   Example: `Example: Using Chrome to access Google Docs.`
+*   **Multi-line Descriptive Blocks:** `r'(?m)^(Cloud computing is|A Service Level Agreement|This statement means).*'`
+    *   Example: `Cloud computing is the delivery of computing services...`
+
+**Asset Placeholder Patterns**
+*   **HTML Tables:** `r'(?s)<table>.*?</table>'`
+    *   Example: `<table><tr><td>Benefit</td>...</tr></table>`
+*   **Image Placeholders:** `r'!\[\]\(\[\[IMG:.*?\]\]\)'`
+    *   Example: `![]([[IMG:I1]])`
+*   **Formula/Symbolic Text:** `r'(\$[\d\w\s,.]+|^ \^ \+ .*|99\.999\%)'`
+    *   Example: `$1B /year` or `99.999% uptime`
+
+**Stop Conditions**
+*   **New Section Header:** `r'\n(?=# )'`
+    *   Example: The end of a block before `# 2. Framework Phases` starts.
+*   **Multiple Line Breaks:** `r'\n\s*\n\s*\n'`
+    *   Example: A significant gap between content blocks.
+*   **Horizontal Transition:** `r'^(Key Takeaways:|Comparison:|Detailed Notes)'`
+    *   Example: When the text shifts from specific points to a summary section.
+
+**Exclusion Patterns**
+*   **Metadata/Document Headers:** `r'^(Mid sem notes|Module \d+|Detailed Notes).*'`
+    *   Example: `Module 1-Cloud Computing Architecture`
+*   **Structural Fragments:** `r'^Divided into .*:$|^Combines two paradigms:$'`
+    *   Example: `Divided into frontend (client-facing) and backend (cloud infrastructure):`
+*   **Standalone Image Syntax:** `r'^!\[\].*'`
+    *   Example: `![]([[IMG:I2]])`
+
+**Fallback Patterns**
+*   **Generic Question Fallback:** `r'(?:^# .*|^ \d+\. .*)'`
+    *   Example: `# 5. Challenges & Mitigations`
+*   **Generic Answer Fallback:** `r'(?:^• .*|^o .*|^▪ .*|^[A-Z][a-z]+: .*)'`
+    *   Example: `• Accessibility: Access services anywhere via internet`
+*   **Generic Block Fallback:** `r'(?s)(?<=:)\n\n(.*?)(?=\n#|\Z)'`
+    *   Example: Captures the entire block of text following a colon until the next header.
+
+--- Gemini attempt 1 ---
+Question pattern: `r'(?m)^(?:#\s+)?(?:Q(?:uestion)?\s*\d+[\.:\s]|\d+\.[\s])(?:\s*\([a-z]\))?.*'`
+Example: '# Q7. (a) What is a confusion matrix?'
+
+Answer pattern: `r'(?m)^(?:#\s+)?(?:Answer|Solution|Ans|A)[:\s].*'`
+Example: 'Answer: The harmonic mean of precision and recall.'
+
+Stop condition: `r'(?m)^(?=#\s+|Q\d+|Question\s*\d+|\d+\.|\!\[\]|\[\[FORMULA|<table>|End of)'`
+Example: The parser stops the current answer block when it encounters '# Section B' or 'Q12.'
+
+Multi-part Question pattern: `r'\([a-z]\)\s+[^?\n]+\??'`
+Example: '(b) Name its four basic entries.'
+
+Asset Placeholder (Image): `r'\!\[\]\(\[\[IMG:[^\]]+\]\]\)'`
+Example: '![]([[IMG:I1]])'
+
+Asset Placeholder (Formula): `r'\[\[FORMULA:[^\]]+\]\]'`
+Example: '[[FORMULA:F1]]'
+
+Asset Placeholder (Table): `r'(?s)<table>.*?</table>'`
+Example: '<table><tr><td>Actual Positive</td><td>TP = 42</td></tr></table>'
+
+Exclusion (Code Blocks): `r'(?s)```.*?```'`
+Example: '```python\nprint("Q1")\n```'
+
+Exclusion (Captions): `r'(?m)^(?:Figure|Table|Formula)\s+\d+[:\s].*'`
+Example: 'Figure 1: Sine Wave (y = sin(x))'
+
+Fallback Question pattern: `r'(?m)^(?:#\s+)?(?:Q\d+|Question\s*\d+|\d+\.)'`
+Example: 'Q21. Solve 2x^2...'
+
+Fallback Answer pattern: `r'(?m)^(?:Answer|Solution|Ans):'`
+Example: 'Answer: 0.6667 (approx).'
+
+--- Gemini attempt 1 ---
+Question pattern: `r'(?:^|\n)(?:#\s*)?(?:Q|Question)\s*\d+[\.:\s]+(?:(?:\([a-z]\).+)|(?:.+))'`
+Example: `# Q7. (a) What is a confusion matrix? (b) Name its four basic entries.`
+
+Answer pattern: `r'(?:^|\n)(?:Answer|Solution|A):\s*'`
+Example: `Answer: The harmonic mean of precision and recall: $\mathsf { F } \mathsf { 1 } =$ ...`
+
+Sub-question pattern: `r'\([a-z]\)\s*[^(\n]+'`
+Example: `(a) average revenue, (b) month with max users.`
+
+Stop condition: `r'(?=\n(?:#\s*)?(?:Q|Question)\s*\d+|\n#\s+Section|\n!\[\]|\n\[\[FORMULA|\nEnd of Packet)'`
+Example: The parser stops the current answer block when it encounters `\n# Q18.` or `\n# Section D`.
+
+Asset Placeholder (Images/Formulas): `r'(!\[\]\(\[\[IMG:.*?\]\]\)|\[\[FORMULA:.*?\]\])'`
+Example: `![]([[IMG:I1]])` or `[[FORMULA:F1]]`
+
+Exclusion (Code Blocks): `r'```[a-z]*\n[\s\S]*?\n```'`
+Example: 
+```python
+print("Q1. Is this a question?")
+```
+
+Exclusion (Tables): `r'<table>[\s\S]*?</table>'`
+Example: `<table><tr><td>TP = 42</td><td>FN = 8</td></tr></table>`
+
+Exclusion (Captions/Metadata): `r'(?:^|\n)(?:Figure|Table|Formula)\s+\d+[:\s].*'`
+Example: `Figure 1: Sine Wave (y = sin(x))`
+
+Fallback Question Pattern: `r'(?:^|\n)(?:\d+[\.:\s]|Q\d+[\.:\s]|Question\s*\d+[\.:\s]|#\s+.*?\?)'`
+Example: `21. Solve 2x^2...`
+
+Fallback Answer Pattern: `r'(?:^|\n)(?:Answer|Solution|A|Ans)[:\s]+'`
+Example: `Ans: 42.`
+
+--- Gemini attempt 1 ---
+Question pattern: `r'^(?:#\s+)?(?:Q|Question|Task)\s*\d+[:.]?|^\d+\.\s+|^\([a-z]\)\s+'`
+Example: '# Q1. What does accuracy measure?' or 'Q21. Solve 2x^2...' or '(a) What is a confusion matrix?'
+
+Answer pattern: `r'^(?:Answer|A|Solution|Soln)[:.]\s*'`
+Example: 'Answer: The fraction of all predictions that are correct.'
+
+Stop condition: `r'(?=\n(?:#\s+Section|#\s+Q\d+|Q\d+|Answer:|\!\[|<table>|End of Packet|\Z))'`
+Example: The start of a new section like '# Section C' or the start of the next question 'Q18.'
+
+Exclusion: `r'(?:^Figure\s\d+:.*|^Table\s\d+:.*|^Code\sSample\s\d+:.*|^#\s+Section\s[A-Z].*|```[\s\S]*?```)'`
+Example: 'Figure 1: Sine Wave (y = sin(x))' or a python code block.
+
+Asset pattern (Tables): `r'<table>[\s\S]*?</table>'`
+Example: '<table><tr><td>Actual Positive</td><td>TP = 42</td></tr></table>'
+
+Asset pattern (Images): `r'\!\[.*?\]\(\[\[IMG:[^\]]+\]\]\)'`
+Example: '![]([[IMG:I1]])'
+
+Asset pattern (Formulas): `r'\[\[FORMULA:[^\]]+\]\]|\$\$.*?\$\$|\$.*?\$'`
+Example: '[[FORMULA:F1]]' or '$\mathsf { F } 1$'
+
+Fallback Question pattern: `r'(?m)^(?:#\s+)?(?:Q\d+|Question\s\d+|\d+\.)'`
+Example: '1. Convert this PDF to Markdown'
+
+Fallback Answer pattern: `r'(?m)^(?:Answer|A|Solution):'`
+Example: 'A: Dropout and L2 weight decay.'
+
+--- Gemini attempt 1 ---
+Question pattern: `r'(?:^#\s+|^)Q\d+\..*'`
+Example: `# Q1. What does accuracy measure?`
+
+Answer pattern: `r'^Answer:.*'`
+Example: `Answer: The fraction of all predictions that are correct: (TP+TN)/(TP+TN+FP+FN).`
+
+Stop condition: `r'(\n\n|^#\s+(?!Q\d+)|$)'`
+Example: End of section (e.g., `# Section C`) or a double newline.
+
+Exclusion: `r'(^#\s+(?!Q\d+).*|^Table\s+\d+:.*|^Figure\s+\d+:.*|(?s)```.*?```)'`
+Example: `# Section A — Concepts and Metrics` or `Table 1: Confusion Matrix`
+
+Fallback pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'` for questions, `r'(Answer:|Solution:|A:)'` for answers.
+
+--- Gemini attempt 2 ---
+Question pattern: `r'^(?:#\s+)?(?:Q(?:n\.)?\d+\.|Question\s\d+:)\s+.*'`
+Example: `# Q1. What does accuracy measure?`
+
+Answer pattern: `r'^(?:Answer:)\s+.*'`
+Example: `Answer: The fraction of all predictions that are correct: (TP+TN)/(TP+TN+FP+FN).`
+
+Fallback Question pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'`
+Example: `Question 2: Give one reason accuracy can be misleading...`
+
+Fallback Answer pattern: `r'(Answer:|Solution:|A:)'`
+Example: `Solution: If the negative class dominates...`
+
+--- Gemini attempt 1 ---
+Question pattern: `r'^(?:Q?\d+\))\s+'`
+Example: 'Q1) A firm can produce 3 types of cloth...'
+
+Answer pattern: `r'^#?\s*Solution:?'`
+Example: '# Solution:'
+
+Fallback question pattern: `r'(Q\d+\.|Question \d+:|Q\d+:|\d+\)\s)'`
+Example: '1) A Person wants to decide...'
+
+Fallback answer pattern: `r'(Answer:|Solution:|A:)'`
+Example: 'Solution: Let x be the number...'
+
+--- Gemini attempt 1 FAILED ---
+429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. ', 'status': 'RESOURCE_EXHAUSTED'}}
+
+--- Gemini attempt 2 FAILED ---
+429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. ', 'status': 'RESOURCE_EXHAUSTED'}}
+
+--- Gemini attempt 2 ---
+None
+
+--- Gemini attempt 1 FAILED ---
+429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. ', 'status': 'RESOURCE_EXHAUSTED'}}
+
+--- Gemini attempt 2 FAILED ---
+429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. ', 'status': 'RESOURCE_EXHAUSTED'}}
+
+--- Gemini attempt 2 ---
+None
