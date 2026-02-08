@@ -32,46 +32,76 @@ def find_best_md(unzipped_dir):
 def normalize_markdown(md_path, block_maps_path):
     with open(md_path, 'r', encoding='utf-8') as f:
         text = f.read()
-    # MinerU standard atomic block extraction
-    # 1) HTML Table block
-    table_matches = list(re.finditer(r'<table\b[^>]*>[\s\S]*?</table>', text))
+    # Robust atomic block extraction for all table, formula, image, code types
+    # Tables: Markdown, HTML, LaTeX
     tables = []
-    for i, m in enumerate(table_matches):
+    # Markdown table
+    for m in re.finditer(r'((?:\|.*\|(?:\n|$))+)', text):
+        if m.group(0).count('|') > 1:
+            tables.append(m.group(0))
+            text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+    # HTML table
+    for m in re.finditer(r'(<table[\s\S]*?</table>)', text):
         tables.append(m.group(0))
-        text = text.replace(m.group(0), f'[[TABLE:T{i+1}]]')
-    # 2) Fenced code block
-    code_matches = list(re.finditer(r'```[\w+-]*\n[\s\S]*?\n```', text))
-    codes = []
-    for i, m in enumerate(code_matches):
-        codes.append(m.group(0))
-        text = text.replace(m.group(0), f'[[CODE:C{i+1}]]')
-    # 3) Block math (dollar and bracket)
-    math_matches = list(re.finditer(r'\$\$[\s\S]*?\$\$', text))
-    math_bracket_matches = list(re.finditer(r'\\\[[\s\S]*?\\\]', text))
+        text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+    # LaTeX tabular
+    for m in re.finditer(r'(\\begin\{tabular\}[\s\S]*?\\end\{tabular\})', text):
+        tables.append(m.group(0))
+        text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+
+    # Formulas: inline, block, LaTeX env
     formulas = []
-    for i, m in enumerate(math_matches):
+    # Inline LaTeX
+    for m in re.finditer(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', text):
         formulas.append(m.group(0))
-        text = text.replace(m.group(0), f'[[FORMULA:F{i+1}]]')
-    for i, m in enumerate(math_bracket_matches):
+        text = text.replace(m.group(0), f'[[FORMULA:F{len(formulas)}]]')
+    # Block LaTeX
+    for m in re.finditer(r'\$\$(.+?)\$\$', text, re.DOTALL):
         formulas.append(m.group(0))
-        text = text.replace(m.group(0), f'[[FORMULA:F{len(math_matches)+i+1}]]')
-    # 4) Image line (Markdown)
-    img_matches = list(re.finditer(r'^!\[[^\]]*\]\(([^)]+)\)\s*$', text, re.MULTILINE))
+        text = text.replace(m.group(0), f'[[FORMULA:F{len(formulas)}]]')
+    # LaTeX envs
+    for m in re.finditer(r'(\\begin\{(equation|align|gather|multline)\*?\}[\s\S]*?\\end\{\2\*?\})', text):
+        formulas.append(m.group(0))
+        text = text.replace(m.group(0), f'[[FORMULA:F{len(formulas)}]]')
+
+    # Images: Markdown, HTML, LaTeX
     images = []
-    for i, m in enumerate(img_matches):
+    for m in re.finditer(r'!\[([^\]]*)\]\(([^)]+)\)', text):
         images.append(m.group(0))
-        text = text.replace(m.group(0), f'[[IMG:I{i+1}]]')
-    # 5) Captions
-    caption_matches = list(re.finditer(r'^(Figure|Fig\.|Table|Formula)\s+\d+\s*:\s+.+$', text, re.MULTILINE))
+        text = text.replace(m.group(0), f'[[IMG:I{len(images)}]]')
+    for m in re.finditer(r'<img\s+[^>]*src=["\"]([^"\"]+)["\"][^>]*>', text):
+        images.append(m.group(0))
+        text = text.replace(m.group(0), f'[[IMG:I{len(images)}]]')
+    for m in re.finditer(r'\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}', text):
+        images.append(m.group(0))
+        text = text.replace(m.group(0), f'[[IMG:I{len(images)}]]')
+
+    # Code blocks: fenced, indented, HTML, LaTeX
+    codes = []
+    for m in re.finditer(r'```(?:[a-zA-Z0-9]*)\n([\s\S]*?)```', text):
+        codes.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CODE:C{len(codes)}]]')
+    for m in re.finditer(r'(?:^|\n)(    .+(?:\n    .+)*)', text):
+        codes.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CODE:C{len(codes)}]]')
+    for m in re.finditer(r'<pre>([\s\S]*?)</pre>', text):
+        codes.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CODE:C{len(codes)}]]')
+    for m in re.finditer(r'\\begin\{verbatim\}([\s\S]*?)\\end\{verbatim\}', text):
+        codes.append(m.group(0))
+        text = text.replace(m.group(0), f'[[CODE:C{len(codes)}]]')
+
+    # Captions
     captions = []
-    for i, m in enumerate(caption_matches):
+    for m in re.finditer(r'^(Figure|Fig\.|Table|Formula)\s+\d+\s*:\s+.+$', text, re.MULTILINE):
         captions.append(m.group(0))
-        text = text.replace(m.group(0), f'[[CAPTION:K{i+1}]]')
-    # 6) Section heading
-    section_matches = list(re.finditer(r'^#{1,6}\s*Section\b.*$', text, re.MULTILINE))
+        text = text.replace(m.group(0), f'[[CAPTION:K{len(captions)}]]')
+
+    # Section heading
     sections = []
-    for i, m in enumerate(section_matches):
+    for m in re.finditer(r'^#{1,6}\s*Section\b.*$', text, re.MULTILINE):
         sections.append(m.group(0))
+
     block_maps = {
         'tables': tables,
         'images': images,
