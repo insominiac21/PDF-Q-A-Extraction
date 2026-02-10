@@ -36,7 +36,6 @@ def normalize_markdown(md_path, block_maps_path):
     # Tables: Markdown, HTML, LaTeX
     tables = []
     # Markdown table (improved: must have header, separator, and at least one row)
-    # More robust markdown table extraction: header, separator, at least one data row, flexible whitespace
     md_table_pattern = re.compile(
         r'(?:^|\n)'
         r'(\|(?:[^\n]*\|)+)\s*\n'  # header
@@ -46,18 +45,37 @@ def normalize_markdown(md_path, block_maps_path):
     )
     for m in md_table_pattern.finditer(text):
         table_block = m.group(0)
-        # Avoid duplicate extraction if already replaced
         if table_block.strip() and table_block in text:
             tables.append(table_block)
             text = text.replace(table_block, f'[[TABLE:T{len(tables)}]]')
-    # HTML table
-    for m in re.finditer(r'(<table[\s\S]*?</table>)', text):
-        tables.append(m.group(0))
-        text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+            print(f"[DEBUG] Markdown table detected and appended. Length: {len(table_block)}")
+
+    # Improved HTML table regex: non-greedy, multiline, robust to whitespace
+    html_table_pattern = re.compile(r'<table[\s\S]*?<\/table>', re.IGNORECASE)
+    for m in html_table_pattern.finditer(text):
+        table_block = m.group(0)
+        if table_block.strip() and table_block in text:
+            tables.append(table_block)
+            text = text.replace(table_block, f'[[TABLE:T{len(tables)}]]')
+            print(f"[DEBUG] HTML table detected and appended. Length: {len(table_block)}")
+
     # LaTeX tabular
-    for m in re.finditer(r'(\\begin\{tabular\}[\s\S]*?\\end\{tabular\})', text):
-        tables.append(m.group(0))
-        text = text.replace(m.group(0), f'[[TABLE:T{len(tables)}]]')
+    latex_table_pattern = re.compile(r'(\\begin\{tabular\}[\s\S]*?\\end\{tabular\})', re.MULTILINE)
+    for m in latex_table_pattern.finditer(text):
+        table_block = m.group(0)
+        if table_block.strip() and table_block in text:
+            tables.append(table_block)
+            text = text.replace(table_block, f'[[TABLE:T{len(tables)}]]')
+            print(f"[DEBUG] LaTeX table detected and appended. Length: {len(table_block)}")
+
+    # Fallback: very permissive table pattern (for edge cases)
+    fallback_table_pattern = re.compile(r'<table[\s\S]+?<\/table>', re.IGNORECASE)
+    for m in fallback_table_pattern.finditer(text):
+        table_block = m.group(0)
+        if table_block.strip() and table_block not in tables and table_block in text:
+            tables.append(table_block)
+            text = text.replace(table_block, f'[[TABLE:T{len(tables)}]]')
+            print(f"[DEBUG] Fallback HTML table detected and appended. Length: {len(table_block)}")
 
     # Formulas: inline, block, LaTeX env
     formulas = []
@@ -120,8 +138,10 @@ def normalize_markdown(md_path, block_maps_path):
         'captions': captions,
         'sections': sections
     }
+    print(f"[DEBUG] block_maps before JSON dump: {block_maps}")
     with open(block_maps_path, 'w', encoding='utf-8') as f:
         json.dump(block_maps, f)
+    print(f"[DEBUG] block_maps after JSON dump: {block_maps}")
     return text, block_maps
 
 def mine_regex_patterns(text, gemini_api_key):
@@ -275,12 +295,12 @@ def extract_qa_with_patterns(text, block_maps, ruleset):
             formula_tags = re.findall(r'\[\[FORMULA:F(\d+)\]\]', text)
             code_tags = re.findall(r'\[\[CODE:C(\d+)\]\]', text)
             caption_tags = re.findall(r'\[\[CAPTION:K(\d+)\]\]', text)
-            # Link actual block content
-            tables = [block_maps['tables'][int(i)-1] if block_maps['tables'] and int(i)-1 < len(block_maps['tables']) else f'T{i}' for i in table_tags]
-            images = [block_maps['images'][int(i)-1] if block_maps['images'] and int(i)-1 < len(block_maps['images']) else f'I{i}' for i in img_tags]
-            formulas = [block_maps['formulas'][int(i)-1] if block_maps['formulas'] and int(i)-1 < len(block_maps['formulas']) else f'F{i}' for i in formula_tags]
-            codes = [block_maps['codes'][int(i)-1] if block_maps['codes'] and int(i)-1 < len(block_maps['codes']) else f'C{i}' for i in code_tags]
-            captions = [block_maps['captions'][int(i)-1] if block_maps['captions'] and int(i)-1 < len(block_maps['captions']) else f'K{i}' for i in caption_tags]
+            # Link by index (T1, T2, ...) for tables, not full HTML
+            tables = [f'T{i}' for i in table_tags]
+            images = [f'I{i}' for i in img_tags]
+            formulas = [f'F{i}' for i in formula_tags]
+            codes = [f'C{i}' for i in code_tags]
+            captions = [f'K{i}' for i in caption_tags]
             return {'tables': tables, 'images': images, 'formulas': formulas, 'codes': codes, 'captions': captions}
 
         asset_links = find_asset_links(question + answer, block_maps)
@@ -465,6 +485,7 @@ def main():
         return refined
 
     qa_items_refined = further_split_qa(qa_items)
+    print(f"[DEBUG] block_maps before final_refined: {block_maps}")
     final_refined = {
         'qa': qa_items_refined,
         'tables': block_maps['tables'],
@@ -475,6 +496,7 @@ def main():
         'input_file': uploaded_pdf.name,
         'timestamp': timestamp
     }
+    print(f"[DEBUG] final_refined before JSON dump: {final_refined}")
 
     # --- Validation Layer ---
     def validate_final_json(final):

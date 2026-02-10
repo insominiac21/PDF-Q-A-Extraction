@@ -394,3 +394,72 @@ None
 
 --- Gemini attempt 2 ---
 None
+
+--- Gemini attempt 2 ---
+Question pattern: `r'^#?\s*Q\d+\.\s+.*'`
+Example: '# Q1. What does accuracy measure?'
+
+Answer pattern: `r'^Answer:\s+.*'`
+Example: 'Answer: The fraction of all predictions that are correct: (TP+TN)/(TP+TN+FP+FN).'
+
+Stop condition: End of string, next question marker (`^#?\s*Q\d+\.`), next major heading (`^# (?!Q\d+)`), or double newline.
+
+Exclusion: Lines starting with `# Section`, `[[TABLE:`, `[[CODE:`, `[[IMG:`, or `[[CAPTION:`.
+
+Fallback Question pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'`
+Example: 'Question 2: Give one reason accuracy can be misleading...'
+
+Fallback Answer pattern: `r'(Answer:|Solution:|A:)'`
+Example: 'Answer: If the negative class dominates...'
+
+--- Gemini attempt 1 ---
+Question pattern: `r'^#?\s*Q\d+[\.:]\s*'`
+Example: `# Q1. What does accuracy measure?` or `Q21. Solve...`
+
+Answer pattern: `r'^Answer:\s*'`
+Example: `Answer: The fraction of all predictions that are correct...`
+
+Stop condition: A new line starting with `# Q`, `Q`, `# Section`, or a blank line followed by metadata tags (e.g., `[[TABLE`, `[[IMG`).
+
+Exclusion: Ignore lines starting with `# Section`, generic numbered lists (e.g., `1. Convert...`), and text within code blocks `[[CODE:C1]]`.
+
+Fallback pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'` for questions, `r'(Answer:|Solution:|A:)'` for answers.
+
+--- Gemini attempt 1 ---
+Question pattern: `r'^#?\s*Q\d+\.\s+'`
+Example: '# Q1. What does accuracy measure?'
+
+Answer pattern: `r'^Answer:\s+'`
+Example: 'Answer: The fraction of all predictions that are correct...'
+
+Fallback pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'` for questions, `r'(Answer:|Solution:|A:)'` for answers.
+
+--- Gemini attempt 1 ---
+Question pattern: `r'^#?\s*Q\d+\.\s+'`
+Example: '# Q1. What does accuracy measure?'
+
+Answer pattern: `r'^Answer:\s+'`
+Example: 'Answer: The fraction of all predictions that are correct: (TP+TN)/(TP+TN+FP+FN).'
+
+Stop condition: End of section (new `#` heading), the start of a new question (`^#?\s*Q\d+\.`), or a blank line (`^\s*$`).
+
+Exclusion: Ignore headings not starting with 'Q' (e.g., '# Section A'), task lists (e.g., '1. Convert...'), and atomic blocks (e.g., '[[TABLE:T1]]', '[[CODE:C1]]').
+
+Fallback pattern: `r'(Q\d+\.|Question \d+:|Q\d+:)'` for questions, `r'(Answer:|Solution:|A:)'` for answers.
+
+--- Gemini attempt 2 ---
+Question pattern: `r'^(?:Q\d+\)|(?:\d+\)\s+[A-Z]))'`
+Example: 'Q1) A firm can produce 3 types of cloth...' or '1) A Person wants to decide...'
+
+Answer pattern: `r'^(?:#\s*Solution:?|Solution:)'`
+Example: '# Solution:' or 'Solution: Let x be the number...'
+
+Fallback Question pattern: `r'^(?:Q\d+[:.)]|Question\s*\d+[:.)]|(?:\d+[\).]))'`
+Example: 'Q1. What is...'
+
+Fallback Answer pattern: `r'^(?:#*\s*Solution:?|Answer:|A:)'`
+Example: 'Answer: The result is...'
+
+Stop condition: `r'^(?=#|Q\d+\)|(?:\d+\)\s+[A-Z])|\n\n)'` (New heading, new question marker, or double newline).
+
+Exclusion: `r'^(?:# (?!Solution)|\[\[TABLE|\[\[FORMULA|\[\[IMG)'` (Ignore main headings, tables, formulas, and images as question starters).
