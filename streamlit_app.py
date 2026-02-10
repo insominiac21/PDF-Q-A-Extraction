@@ -174,7 +174,8 @@ def mine_regex_patterns(text, gemini_api_key):
     for attempt in range(max_attempts):
         try:
             response = client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model="gemini-2.0-flash",
+                # model="gemini-3-flash-preview",
                 contents=prompt
             )
             gemini_text = response.text if hasattr(response, 'text') else str(response)
