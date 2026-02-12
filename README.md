@@ -20,7 +20,7 @@ Extract structured Q/A pairs from PDFs using MinerU, robust regex mining, and as
 ---
 
 ## 🛠️ Architecture & Workflow
-## 🛠️ Architecture & Workflow
+
 
 ```mermaid
 graph TD
