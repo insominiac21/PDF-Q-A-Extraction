@@ -20,6 +20,9 @@ Extract structured Q/A pairs from PDFs using MinerU, robust regex mining, and as
 ---
 
 ## 🛠️ Architecture & Workflow
+## 🛠️ Architecture & Workflow
+
+```mermaid
 graph TD
     PDF["PDF Input"] -->|MinerU API| ZIP["ZIP: Markdown + Assets"]
     ZIP -->|Normalize| MD["Normalized Markdown"]
@@ -28,6 +31,7 @@ graph TD
     QA -->|Link| Assets["Tables, Images, Formulas, Code"]
     QA -->|Validate| JSON["Structured JSON Output"]
     JSON -->|UI| Streamlit["Streamlit App"]
+```
 
 ## ✨ Features
 
